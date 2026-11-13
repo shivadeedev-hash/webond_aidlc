@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+/api/bin/
+/api/webond
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# Test coverage
+coverage/
+
+# OS / editor
+.DS_Store
+
+# AWS deployment parameters (may contain account ids / certificate ARNs)
+deploy/aws/params.*.env
+!deploy/aws/params.example.env

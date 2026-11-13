@@ -1,0 +1,20 @@
+[
+  {
+    "id": 201,
+    "assetType": "gold",
+    "code": "GOLD-965",
+    "name": "ทองคำ 96.5%",
+    "purity": "96.5%",
+    "riskLevel": 4,
+    "isActive": true
+  },
+  {
+    "id": 202,
+    "assetType": "gold",
+    "code": "GOLD-9999",
+    "name": "ทองคำ 99.99%",
+    "purity": "99.99%",
+    "riskLevel": 4,
+    "isActive": true
+  }
+]

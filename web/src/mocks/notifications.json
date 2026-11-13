@@ -1,0 +1,73 @@
+{
+  "notifications": [
+    {
+      "id": 7001,
+      "channel": "inapp",
+      "category": "order",
+      "subject": "คำสั่งซื้อสำเร็จ",
+      "body": "คำสั่งซื้อ K-GLOBAL มูลค่า ฿5,000.00 ดำเนินการสำเร็จ",
+      "readAt": null,
+      "createdAt": "2026-10-27T06:20:10Z"
+    },
+    {
+      "id": 7002,
+      "channel": "inapp",
+      "category": "coupon",
+      "subject": "รับดอกเบี้ยพันธบัตร",
+      "body": "ได้รับดอกเบี้ย LB28DA จำนวน ฿1,625.00 เข้ากระเป๋าเงิน",
+      "readAt": "2026-09-15T04:00:00Z",
+      "createdAt": "2026-09-15T03:00:00Z"
+    },
+    {
+      "id": 7003,
+      "channel": "inapp",
+      "category": "dca",
+      "subject": "DCA ดำเนินการสำเร็จ",
+      "body": "แผน DCA K-GLOBAL รอบที่ 3 ลงทุน ฿5,000.00 สำเร็จ",
+      "readAt": "2026-10-05T09:00:00Z",
+      "createdAt": "2026-10-05T08:30:00Z"
+    },
+    {
+      "id": 7004,
+      "channel": "inapp",
+      "category": "dca",
+      "subject": "DCA ไม่สำเร็จ",
+      "body": "แผน DCA SCBSET50 รอบนี้ไม่สำเร็จ: ยอดเงินในกระเป๋าไม่พอ",
+      "readAt": null,
+      "createdAt": "2026-10-20T08:30:00Z"
+    },
+    {
+      "id": 7005,
+      "channel": "inapp",
+      "category": "general",
+      "subject": "ยินดีต้อนรับสู่ WeBond",
+      "body": "บัญชีของคุณพร้อมใช้งานแล้ว เริ่มสำรวจสินทรัพย์ได้เลย",
+      "readAt": "2026-08-01T03:30:00Z",
+      "createdAt": "2026-08-01T03:00:00Z"
+    }
+  ],
+  "inbox": [
+    {
+      "id": 8001,
+      "channel": "email",
+      "category": "verify",
+      "subject": "ยืนยันอีเมลของคุณ",
+      "body": "รหัสยืนยัน (OTP) ของคุณคือ 482913",
+      "token": "482913",
+      "tokenExpiresAt": "2026-08-01T02:30:00Z",
+      "readAt": null,
+      "createdAt": "2026-08-01T02:15:00Z"
+    },
+    {
+      "id": 8002,
+      "channel": "email",
+      "category": "order",
+      "subject": "ยืนยันคำสั่งซื้อ K-GLOBAL",
+      "body": "คำสั่งซื้อ WB2608050000001 มูลค่า ฿50,000.00 สำเร็จแล้ว",
+      "token": null,
+      "tokenExpiresAt": null,
+      "readAt": null,
+      "createdAt": "2026-08-05T06:21:00Z"
+    }
+  ]
+}

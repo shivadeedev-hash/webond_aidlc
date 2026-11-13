@@ -1,0 +1,4 @@
+bin
+webond
+*.log
+.env

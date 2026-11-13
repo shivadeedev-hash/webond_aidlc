@@ -1,0 +1,54 @@
+[
+  {
+    "id": 1,
+    "assetType": "fund",
+    "code": "K-GLOBAL",
+    "name": "กองทุนเปิดเค โกลบอล อิควิตี้",
+    "category": "Global Equity",
+    "riskLevel": 5,
+    "minPurchase": "500.0000",
+    "settlementDays": 4,
+    "cutoffTime": "15:30",
+    "factSheetUrl": "#",
+    "isActive": true
+  },
+  {
+    "id": 2,
+    "assetType": "fund",
+    "code": "SCBSET50",
+    "name": "กองทุนเปิดไทยพาณิชย์ SET50 Index",
+    "category": "Thai Equity",
+    "riskLevel": 4,
+    "minPurchase": "500.0000",
+    "settlementDays": 3,
+    "cutoffTime": "15:30",
+    "factSheetUrl": "#",
+    "isActive": true
+  },
+  {
+    "id": 3,
+    "assetType": "fund",
+    "code": "TMBMONEY",
+    "name": "กองทุนเปิดทหารไทยธนไพศาล (ตลาดเงิน)",
+    "category": "Money Market",
+    "riskLevel": 1,
+    "minPurchase": "500.0000",
+    "settlementDays": 1,
+    "cutoffTime": "15:30",
+    "factSheetUrl": "#",
+    "isActive": true
+  },
+  {
+    "id": 4,
+    "assetType": "fund",
+    "code": "KFAFIX",
+    "name": "กองทุนเปิดกรุงศรีตราสารหนี้",
+    "category": "Fixed Income",
+    "riskLevel": 3,
+    "minPurchase": "500.0000",
+    "settlementDays": 2,
+    "cutoffTime": "15:30",
+    "factSheetUrl": "#",
+    "isActive": true
+  }
+]

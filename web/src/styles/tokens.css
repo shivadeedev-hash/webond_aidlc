@@ -1,0 +1,85 @@
+/*
+ * WeBond design tokens — single source of truth for theme values.
+ * Light mode is the default. Components must consume these CSS variables
+ * (directly or via the Tailwind theme mapping in tailwind.config.js),
+ * never hardcoded hex values.
+ *
+ * Theme: red and white, modern and friendly (Add-on 2026-11-12c).
+ * Token -> meaning map and rationale: see .kiro/steering/design-system.md
+ */
+:root {
+  color-scheme: light;
+
+  /* ---- Primitive palette ---- */
+  --red-50: #fff1f2; /* soft tint: active nav, selected, highlights */
+  --red-100: #ffe1e4; /* soft tint, stronger */
+  --red-600: #d61f2c; /* brand / primary (5.1:1 on white) */
+  --red-700: #b8141f; /* primary hover */
+  --red-800: #96101a; /* primary active, focus ring */
+  --brick-700: #b42318; /* danger / loss (distinct from brand red) */
+
+  --white: #ffffff;
+  --rose-25: #fffafa; /* page base: white with a hint of warmth */
+  --rose-50: #fff5f5; /* section tint */
+  --rose-200: #f3e3e5; /* borders */
+  --gray-500: #6b6264; /* muted text (5.9:1 on white) */
+  --ink: #1f1416; /* body text: near-black, warm */
+
+  --green-700: #15803d; /* success / gain */
+  --amber-600: #b45309; /* warning */
+  --sky-700: #0369a1; /* info */
+
+  /* ---- Semantic surface tokens ---- */
+  --color-bg: var(--rose-25);
+  --color-surface: var(--white);
+  --color-surface-muted: var(--rose-50);
+  --color-border: var(--rose-200);
+
+  /* ---- Text tokens ---- */
+  --color-text: var(--ink);
+  --color-text-muted: var(--gray-500);
+  --color-text-inverse: var(--white); /* text on red / brand surfaces */
+
+  /* ---- Brand tokens ---- */
+  --color-header: var(--white); /* white sticky header */
+  --color-header-text: var(--ink);
+  --color-primary: var(--red-600);
+  --color-primary-hover: var(--red-700);
+  --color-primary-active: var(--red-800);
+  --color-primary-soft: var(--red-50);
+  --color-primary-soft-strong: var(--red-100);
+  --color-accent: var(--red-800); /* focus ring (3:1+ on all surfaces) */
+  --gradient-brand: linear-gradient(135deg, var(--red-600) 0%, var(--red-800) 100%);
+
+  /* ---- Semantic status tokens ---- */
+  --color-success: var(--green-700);
+  --color-danger: var(--brick-700);
+  --color-warning: var(--amber-600);
+  --color-info: var(--sky-700);
+
+  /* ---- Radius (friendlier, rounder) ---- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+
+  /* ---- Shadow (soft, warm, layered) ---- */
+  --shadow-sm: 0 1px 2px rgba(150, 16, 26, 0.05), 0 1px 3px rgba(31, 20, 22, 0.04);
+  --shadow-md: 0 4px 14px rgba(150, 16, 26, 0.07), 0 2px 4px rgba(31, 20, 22, 0.04);
+  --shadow-lg: 0 16px 36px rgba(150, 16, 26, 0.12), 0 4px 10px rgba(31, 20, 22, 0.05);
+
+  /* ---- Spacing / layout ---- */
+  --space-gutter: 1.5rem; /* min horizontal page padding */
+  --space-section: 2.5rem; /* gap between sections */
+  --container-max: 1200px; /* centered container width */
+
+  /* ---- Motion ---- */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-standard: 180ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-standard: 0ms;
+  }
+}

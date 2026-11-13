@@ -1,0 +1,25 @@
+{
+  "demoCredentials": { "email": "demo@webond.test", "password": "Demo@1234" },
+  "user": {
+    "id": 1,
+    "email": "demo@webond.test",
+    "fullName": "สมชาย นักลงทุน",
+    "mobile": "0812345678",
+    "dateOfBirth": "1990-05-14",
+    "role": "investor",
+    "status": "active",
+    "bankAccountMasked": "xxx-x-x1234-5",
+    "pdpaConsentAt": "2026-08-01T02:15:00Z",
+    "emailNotificationsEnabled": true,
+    "createdAt": "2026-08-01T02:15:00Z",
+    "updatedAt": "2026-10-20T04:30:00Z"
+  },
+  "riskAssessment": {
+    "id": 1,
+    "userId": 1,
+    "riskLevel": 4,
+    "answers": { "q1": 3, "q2": 4, "q3": 4, "q4": 3, "q5": 5 },
+    "assessedAt": "2026-08-01T03:00:00Z",
+    "expiresAt": "2028-08-01T03:00:00Z"
+  }
+}

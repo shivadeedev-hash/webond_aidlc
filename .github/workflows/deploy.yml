@@ -1,0 +1,59 @@
+# Manual deployment to AWS. Nothing runs automatically.
+#
+# One-time setup (see docs/DEPLOYMENT.md "Deploying from GitHub Actions"):
+#   1. Create an IAM role GitHub can assume through OIDC (no long-lived keys).
+#   2. Create GitHub Environments "dev" and "prod" (add required reviewers to prod).
+#   3. In each Environment set the variable AWS_DEPLOY_ROLE_ARN, and optionally
+#      DEPLOY_PARAMS = the contents of a deploy/aws/params.<env>.env file.
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        type: choice
+        options: [dev, prod]
+        default: dev
+      apply:
+        description: Really deploy (unchecked = dry run that changes nothing)
+        type: boolean
+        default: false
+      region:
+        description: AWS region
+        type: string
+        default: ap-southeast-1
+
+permissions:
+  contents: read
+  id-token: write # needed to request the OIDC token for AWS
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: docker/setup-buildx-action@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ inputs.region }}
+      - name: Write parameter overrides
+        if: ${{ vars.DEPLOY_PARAMS != '' }}
+        run: printf '%s\n' "$DEPLOY_PARAMS" > "$RUNNER_TEMP/params.env"
+        env:
+          DEPLOY_PARAMS: ${{ vars.DEPLOY_PARAMS }}
+      - name: Deploy
+        run: |
+          args=(--env "${{ inputs.environment }}" --region "${{ inputs.region }}")
+          if [ -f "$RUNNER_TEMP/params.env" ]; then args+=(--params "$RUNNER_TEMP/params.env"); fi
+          if [ "${{ inputs.apply }}" = "true" ]; then args+=(--apply --yes); fi
+          ./deploy/aws/deploy.sh "${args[@]}"

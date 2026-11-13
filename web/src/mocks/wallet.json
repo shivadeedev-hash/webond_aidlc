@@ -1,0 +1,86 @@
+{
+  "wallet": { "balance": "152300.5000", "reserved": "5000.0000", "available": "147300.5000" },
+  "transactions": [
+    {
+      "id": 9001,
+      "type": "deposit",
+      "amount": "200000.0000",
+      "balanceAfter": "200000.0000",
+      "refTxnId": null,
+      "status": "done",
+      "createdAt": "2026-08-02T02:10:00Z"
+    },
+    {
+      "id": 9002,
+      "type": "settlement",
+      "amount": "-50000.0000",
+      "balanceAfter": "150000.0000",
+      "refTxnId": 5001,
+      "status": "done",
+      "createdAt": "2026-08-05T08:30:00Z"
+    },
+    {
+      "id": 9003,
+      "type": "settlement",
+      "amount": "-100000.0000",
+      "balanceAfter": "50000.0000",
+      "refTxnId": 5002,
+      "status": "done",
+      "createdAt": "2026-08-12T08:30:00Z"
+    },
+    {
+      "id": 9004,
+      "type": "deposit",
+      "amount": "120000.0000",
+      "balanceAfter": "170000.0000",
+      "refTxnId": null,
+      "status": "done",
+      "createdAt": "2026-09-01T01:45:00Z"
+    },
+    {
+      "id": 9005,
+      "type": "coupon",
+      "amount": "1625.0000",
+      "balanceAfter": "171625.0000",
+      "refTxnId": 5006,
+      "status": "done",
+      "createdAt": "2026-09-15T03:00:00Z"
+    },
+    {
+      "id": 9006,
+      "type": "settlement",
+      "amount": "-15000.0000",
+      "balanceAfter": "156625.0000",
+      "refTxnId": 5004,
+      "status": "done",
+      "createdAt": "2026-10-01T08:30:00Z"
+    },
+    {
+      "id": 9007,
+      "type": "hold",
+      "amount": "-5000.0000",
+      "balanceAfter": "151625.0000",
+      "refTxnId": 5010,
+      "status": "pending",
+      "createdAt": "2026-10-27T06:20:00Z"
+    },
+    {
+      "id": 9008,
+      "type": "deposit",
+      "amount": "5000.0000",
+      "balanceAfter": "156625.0000",
+      "refTxnId": null,
+      "status": "done",
+      "createdAt": "2026-10-20T04:30:00Z"
+    },
+    {
+      "id": 9009,
+      "type": "withdraw",
+      "amount": "-4324.5000",
+      "balanceAfter": "152300.5000",
+      "refTxnId": null,
+      "status": "done",
+      "createdAt": "2026-10-24T07:10:00Z"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- WeBond mark (product's own logo). Static asset: colours mirror tokens.css
+       --red-600 / --red-800 because a favicon cannot read CSS variables. -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#d61f2c"/>
+      <stop offset="1" stop-color="#96101a"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="9" fill="url(#g)"/>
+  <path d="M7 21l5.3-9.3 4.7 6.6 3.3-4.6L25 21" fill="none" stroke="#fff" stroke-width="2.8"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

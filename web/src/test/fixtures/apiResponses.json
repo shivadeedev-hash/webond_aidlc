@@ -1,0 +1,641 @@
+{
+  "login": {
+    "data": {
+      "user": {
+        "email": "demo@webond.test",
+        "fullName": "สมชาย นักลงทุน",
+        "id": 1,
+        "role": "investor",
+        "status": "active"
+      },
+      "accessToken": "<redacted>"
+    }
+  },
+  "assetsFund": {
+    "data": [
+      {
+        "type": "fund",
+        "id": 1,
+        "code": "K-GLOBAL",
+        "name": "K Global Equity Fund",
+        "category": "Equity",
+        "riskLevel": 5,
+        "latestPrice": "14.9100",
+        "periodReturn": "2.67",
+        "priceAsOf": "2026-11-12"
+      },
+      {
+        "type": "fund",
+        "id": 2,
+        "code": "SCB-FIXED",
+        "name": "SCB Fixed Income Fund",
+        "category": "Fixed Income",
+        "riskLevel": 2,
+        "latestPrice": "12.2920",
+        "periodReturn": "-0.22",
+        "priceAsOf": "2026-11-12"
+      },
+      {
+        "type": "fund",
+        "id": 3,
+        "code": "TMB-BAL",
+        "name": "TMB Balanced Allocation",
+        "category": "Balanced",
+        "riskLevel": 3,
+        "latestPrice": "10.7700",
+        "periodReturn": "-4.95",
+        "priceAsOf": "2026-11-12"
+      }
+    ]
+  },
+  "assetsBond": {
+    "data": [
+      {
+        "type": "bond",
+        "id": 2,
+        "code": "CP234A",
+        "name": "CP All Corporate Bond 2027",
+        "riskLevel": 3,
+        "latestPrice": "992.0000",
+        "ytm": "4.0500",
+        "maturityDate": "2028-11-12",
+        "periodReturn": "-0.54",
+        "priceAsOf": "2026-11-12"
+      },
+      {
+        "type": "bond",
+        "id": 1,
+        "code": "LB28DA",
+        "name": "Thai Govt Bond 2028",
+        "riskLevel": 2,
+        "latestPrice": "1005.0000",
+        "ytm": "3.1000",
+        "maturityDate": "2029-11-12",
+        "periodReturn": "0.27",
+        "priceAsOf": "2026-11-12"
+      }
+    ]
+  },
+  "assetsGold": {
+    "data": [
+      {
+        "type": "gold",
+        "id": 1,
+        "code": "GOLD-965",
+        "name": "Gold 96.5%",
+        "latestPrice": "41040.0000",
+        "bidPrice": "40960.0000",
+        "askPrice": "41040.0000",
+        "periodReturn": "-0.77",
+        "priceAsOf": "2026-11-12T12:00:00+07:00"
+      }
+    ]
+  },
+  "detailFund": {
+    "data": {
+      "type": "fund",
+      "id": 1,
+      "code": "K-GLOBAL",
+      "name": "K Global Equity Fund",
+      "fields": {
+        "category": "Equity",
+        "cutoffTime": "15:30:00",
+        "factSheetUrl": "#",
+        "fee": "0.0000",
+        "minPurchase": "500.0000",
+        "nav": "14.9100",
+        "riskLevel": 5,
+        "settlementDays": 3
+      },
+      "priceAsOf": "2026-11-12",
+      "priceUnavailable": false
+    }
+  },
+  "detailBond": {
+    "data": {
+      "type": "bond",
+      "id": 1,
+      "code": "LB28DA",
+      "name": "Thai Govt Bond 2028",
+      "fields": {
+        "accruedInterest": "8.1250",
+        "cleanPrice": "100.5000",
+        "couponFrequency": 2,
+        "couponRate": "3.2500",
+        "creditRating": "AAA",
+        "faceValue": "1000.0000",
+        "issuer": "Ministry of Finance",
+        "maturityDate": "2029-11-12",
+        "minLot": "100000.0000",
+        "offeringEnd": "2027-03-12",
+        "offeringStart": "2026-09-13",
+        "price": "1005.0000",
+        "riskLevel": 2,
+        "ytm": "3.1000"
+      },
+      "priceAsOf": "2026-11-12",
+      "priceUnavailable": false
+    }
+  },
+  "detailGold": {
+    "data": {
+      "type": "gold",
+      "id": 1,
+      "code": "GOLD-965",
+      "name": "Gold 96.5%",
+      "fields": {
+        "ask": "41040.0000",
+        "bid": "40960.0000",
+        "purity": "96.5%"
+      },
+      "priceAsOf": "2026-11-12T12:00:00+07:00",
+      "priceUnavailable": true
+    }
+  },
+  "pricesFund": {
+    "data": [
+      {
+        "date": "2026-11-10",
+        "value": "15.2345"
+      },
+      {
+        "date": "2026-11-11",
+        "value": "15.0731"
+      },
+      {
+        "date": "2026-11-12",
+        "value": "14.9100"
+      }
+    ]
+  },
+  "pricesBond": {
+    "data": [
+      {
+        "date": "2026-11-10",
+        "value": "1006.0640"
+      },
+      {
+        "date": "2026-11-11",
+        "value": "1005.5330"
+      },
+      {
+        "date": "2026-11-12",
+        "value": "1005.0000"
+      }
+    ]
+  },
+  "pricesGold": {
+    "data": [
+      {
+        "date": "2026-11-12T11:26:39+07:00",
+        "value": "41260.0000",
+        "bid": "41180.0000",
+        "ask": "41260.0000"
+      },
+      {
+        "date": "2026-11-12T11:33:02+07:00",
+        "value": "41260.0000",
+        "bid": "41180.0000",
+        "ask": "41260.0000"
+      },
+      {
+        "date": "2026-11-12T12:00:00+07:00",
+        "value": "41040.0000",
+        "bid": "40960.0000",
+        "ask": "41040.0000"
+      }
+    ]
+  },
+  "portfolio": {
+    "data": {
+      "summary": {
+        "marketValue": "639739.46",
+        "totalCost": "635047.10",
+        "unrealizedPl": "4692.36",
+        "realizedPlYtd": "315.00"
+      },
+      "holdings": [
+        {
+          "assetType": "fund",
+          "assetId": 1,
+          "code": "K-GLOBAL",
+          "name": "K Global Equity Fund",
+          "quantity": "3200.5000",
+          "avgCost": "14.2000",
+          "marketPrice": "14.9100",
+          "marketValue": "47719.46",
+          "unrealizedPl": "2272.36",
+          "unrealizedPct": "5.00",
+          "totalCost": "45447.10"
+        },
+        {
+          "assetType": "bond",
+          "assetId": 1,
+          "code": "LB28DA",
+          "name": "Thai Govt Bond 2028",
+          "quantity": "100.0000",
+          "avgCost": "1000.0000",
+          "marketPrice": "1005.0000",
+          "marketValue": "100500.00",
+          "unrealizedPl": "500.00",
+          "unrealizedPct": "0.50",
+          "totalCost": "100000.00",
+          "nextCouponDate": "2027-04-11",
+          "maturityDate": "2029-11-12",
+          "accruedInterest": "812.5000"
+        },
+        {
+          "assetType": "gold",
+          "assetId": 1,
+          "code": "GOLD-965",
+          "name": "Gold 96.5%",
+          "quantity": "12.0000",
+          "avgCost": "40800.0000",
+          "marketPrice": "40960.0000",
+          "marketValue": "491520.00",
+          "unrealizedPl": "1920.00",
+          "unrealizedPct": "0.39",
+          "totalCost": "489600.00"
+        }
+      ]
+    }
+  },
+  "dashboard": {
+    "data": {
+      "totalValue": "639739.46",
+      "totalPl": "4692.36",
+      "cashAvailable": "270000.00",
+      "allocation": [
+        {
+          "assetType": "fund",
+          "value": "47719.46",
+          "pct": "7.46"
+        },
+        {
+          "assetType": "bond",
+          "value": "100500.00",
+          "pct": "15.71"
+        },
+        {
+          "assetType": "gold",
+          "value": "491520.00",
+          "pct": "76.83"
+        }
+      ],
+      "trend": [
+        {
+          "date": "2026-11-10",
+          "value": "641987.75"
+        },
+        {
+          "date": "2026-11-11",
+          "value": "640868.06"
+        },
+        {
+          "date": "2026-11-12",
+          "value": "1628059.46"
+        }
+      ],
+      "topMovers": [
+        {
+          "assetType": "fund",
+          "assetId": 1,
+          "code": "K-GLOBAL",
+          "name": "K Global Equity Fund",
+          "pct": "5.00"
+        },
+        {
+          "assetType": "bond",
+          "assetId": 1,
+          "code": "LB28DA",
+          "name": "Thai Govt Bond 2028",
+          "pct": "0.50"
+        },
+        {
+          "assetType": "gold",
+          "assetId": 1,
+          "code": "GOLD-965",
+          "name": "Gold 96.5%",
+          "pct": "0.39"
+        }
+      ],
+      "dcaSummary": {
+        "activePlans": 2,
+        "totalInvested": "31000.00",
+        "monthlyCommitment": "13666.67"
+      },
+      "upcomingEvents": [
+        {
+          "type": "dca_run",
+          "date": "2026-11-16",
+          "ref": "GOLD-965",
+          "amount": "2000.00"
+        },
+        {
+          "type": "dca_run",
+          "date": "2026-11-22",
+          "ref": "K-GLOBAL",
+          "amount": "5000.00"
+        }
+      ],
+      "lastUpdated": "2026-11-12T18:33:05+07:00"
+    }
+  },
+  "wallet": {
+    "data": {
+      "available": "270000.00",
+      "balance": "285000.00",
+      "reserved": "15000.00"
+    }
+  },
+  "walletTx": {
+    "data": [
+      {
+        "amount": "-15000.00",
+        "balanceAfter": "221177.90",
+        "createdAt": "2026-11-12T10:26:39+07:00",
+        "id": 5,
+        "status": "pending",
+        "type": "hold"
+      },
+      {
+        "amount": "-20000.00",
+        "balanceAfter": "236177.90",
+        "createdAt": "2026-11-07T11:26:39+07:00",
+        "id": 4,
+        "status": "done",
+        "type": "withdraw"
+      },
+      {
+        "amount": "1625.00",
+        "balanceAfter": "256177.90",
+        "createdAt": "2026-10-13T11:26:39+07:00",
+        "id": 3,
+        "status": "done",
+        "type": "coupon"
+      },
+      {
+        "amount": "-45447.10",
+        "balanceAfter": "254552.90",
+        "createdAt": "2026-08-17T11:26:39+07:00",
+        "id": 2,
+        "status": "done",
+        "type": "settlement"
+      },
+      {
+        "amount": "300000.00",
+        "balanceAfter": "300000.00",
+        "createdAt": "2026-08-12T11:26:39+07:00",
+        "id": 1,
+        "status": "done",
+        "type": "deposit"
+      }
+    ],
+    "meta": {
+      "page": 1,
+      "pageSize": 20,
+      "total": 5,
+      "hasMore": false
+    }
+  },
+  "dcaPlans": {
+    "data": [
+      {
+        "amountPerRound": "5000.00",
+        "assetId": 1,
+        "assetType": "fund",
+        "frequency": "monthly",
+        "id": 1,
+        "nextRunDate": "2026-11-22",
+        "roundsExecuted": 3,
+        "runDay": 1,
+        "startDate": "2026-08-14",
+        "status": "active",
+        "totalInvested": "15000.00"
+      },
+      {
+        "amountPerRound": "2000.00",
+        "assetId": 1,
+        "assetType": "gold",
+        "frequency": "weekly",
+        "id": 2,
+        "nextRunDate": "2026-11-16",
+        "roundsExecuted": 8,
+        "runDay": 3,
+        "startDate": "2026-09-13",
+        "status": "active",
+        "totalInvested": "16000.00"
+      }
+    ]
+  },
+  "dcaRounds": {
+    "data": [
+      {
+        "failureReason": "",
+        "id": 3,
+        "runDate": "2026-10-13",
+        "status": "success"
+      },
+      {
+        "failureReason": "",
+        "id": 2,
+        "runDate": "2026-09-13",
+        "status": "success"
+      },
+      {
+        "failureReason": "",
+        "id": 1,
+        "runDate": "2026-08-14",
+        "status": "success"
+      }
+    ]
+  },
+  "transactions": {
+    "data": [
+      {
+        "txnRef": "WBSEED00000009",
+        "type": "buy",
+        "assetType": "fund",
+        "assetId": 3,
+        "amount": "-5000.00",
+        "netAmount": "-5000.00",
+        "status": "submitted",
+        "occurredAt": "2026-11-12T10:33:02+07:00",
+        "tradeDate": "2026-11-12",
+        "settlementDate": "2026-11-15"
+      },
+      {
+        "txnRef": "WBSEED00000008",
+        "type": "withdraw",
+        "amount": "-20000.00",
+        "netAmount": "-20000.00",
+        "status": "completed",
+        "occurredAt": "2026-11-07T11:33:02+07:00",
+        "tradeDate": "2026-11-07",
+        "settlementDate": "2026-11-07"
+      },
+      {
+        "txnRef": "WBSEED00000007",
+        "type": "sell",
+        "assetType": "fund",
+        "assetId": 1,
+        "amount": "15000.00",
+        "quantity": "1050.0000",
+        "price": "14.5000",
+        "netAmount": "15000.00",
+        "status": "completed",
+        "occurredAt": "2026-11-02T11:33:02+07:00",
+        "realizedPl": "315.0000",
+        "tradeDate": "2026-11-02",
+        "settlementDate": "2026-11-05"
+      },
+      {
+        "txnRef": "WBSEED00000003",
+        "type": "dca_buy",
+        "assetType": "gold",
+        "assetId": 1,
+        "amount": "-2000.00",
+        "quantity": "0.0489",
+        "price": "40900.0000",
+        "netAmount": "-2000.00",
+        "status": "completed",
+        "occurredAt": "2026-10-22T11:33:02+07:00",
+        "tradeDate": "2026-10-22",
+        "settlementDate": "2026-10-24"
+      },
+      {
+        "txnRef": "WBSEED00000005",
+        "type": "coupon",
+        "assetType": "bond",
+        "assetId": 1,
+        "amount": "1625.00",
+        "netAmount": "1625.00",
+        "status": "completed",
+        "occurredAt": "2026-10-13T11:33:02+07:00",
+        "tradeDate": "2026-10-13",
+        "settlementDate": "2026-10-13"
+      },
+      {
+        "txnRef": "WBSEED00000006",
+        "type": "buy",
+        "assetType": "gold",
+        "assetId": 1,
+        "amount": "-489600.00",
+        "quantity": "12.0000",
+        "price": "40800.0000",
+        "netAmount": "-489600.00",
+        "status": "completed",
+        "occurredAt": "2026-10-03T11:33:02+07:00",
+        "tradeDate": "2026-10-03",
+        "settlementDate": "2026-10-03"
+      },
+      {
+        "txnRef": "WBSEED00000004",
+        "type": "buy",
+        "assetType": "bond",
+        "assetId": 1,
+        "amount": "-100000.00",
+        "quantity": "100.0000",
+        "price": "1000.0000",
+        "netAmount": "-100000.00",
+        "status": "completed",
+        "occurredAt": "2026-09-23T11:33:02+07:00",
+        "tradeDate": "2026-09-23",
+        "settlementDate": "2026-09-25"
+      },
+      {
+        "txnRef": "WBSEED00000002",
+        "type": "buy",
+        "assetType": "fund",
+        "assetId": 1,
+        "amount": "-45447.10",
+        "quantity": "3200.5000",
+        "price": "14.2000",
+        "netAmount": "-45447.10",
+        "status": "completed",
+        "occurredAt": "2026-08-14T11:33:02+07:00",
+        "tradeDate": "2026-08-14",
+        "settlementDate": "2026-08-17"
+      },
+      {
+        "txnRef": "WBSEED00000001",
+        "type": "deposit",
+        "amount": "300000.00",
+        "netAmount": "300000.00",
+        "status": "completed",
+        "occurredAt": "2026-08-12T11:33:02+07:00",
+        "tradeDate": "2026-08-12",
+        "settlementDate": "2026-08-12"
+      }
+    ],
+    "meta": {
+      "page": 1,
+      "pageSize": 20,
+      "total": 9,
+      "hasMore": false
+    }
+  },
+  "notifications": {
+    "data": [
+      {
+        "body": "You received a THB 1,625.00 coupon from LB28DA.",
+        "category": "coupon",
+        "createdAt": "2026-10-13T11:26:39+07:00",
+        "id": 2,
+        "readAt": null,
+        "subject": "Coupon received"
+      },
+      {
+        "body": "Your K-GLOBAL buy order has been completed.",
+        "category": "order",
+        "createdAt": "2026-08-17T11:26:39+07:00",
+        "id": 1,
+        "readAt": null,
+        "subject": "Order completed"
+      }
+    ]
+  },
+  "profile": {
+    "data": {
+      "bankAccount": "xxx-x-x1234-5",
+      "email": "demo@webond.test",
+      "emailNotificationsEnabled": true,
+      "fullName": "สมชาย นักลงทุน",
+      "id": 1,
+      "mobile": "0812345678",
+      "status": "active"
+    }
+  },
+  "risk": {
+    "data": {
+      "assessedAt": "2026-08-14T11:33:02+07:00",
+      "expiresAt": "2028-11-12T11:33:02+07:00",
+      "riskLevel": 4,
+      "valid": true
+    }
+  },
+  "transactionDetail": {
+    "data": {
+      "transaction": {
+        "txnRef": "WBSEED00000009",
+        "type": "buy",
+        "assetType": "fund",
+        "assetId": 3,
+        "amount": "-5000.00",
+        "netAmount": "-5000.00",
+        "status": "submitted",
+        "occurredAt": "2026-11-12T10:33:02+07:00",
+        "tradeDate": "2026-11-12",
+        "settlementDate": "2026-11-15"
+      },
+      "timeline": [
+        {
+          "status": "submitted",
+          "note": "Pending cut-off",
+          "changedAt": "2026-11-12T10:26:39+07:00"
+        }
+      ],
+      "fee": "0.00"
+    }
+  }
+}

@@ -1,0 +1,1231 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  WeBond on AWS - ECS Fargate API behind an ALB, RDS MySQL, and the React web app
+  on S3 + CloudFront (one domain, /api/* routed to the API). See docs/DEPLOYMENT.md.
+  Prepared but NOT deployed by the project; review the cost and security notes first.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+    Description: >-
+      prod = Multi-AZ database, deletion protection, one NAT gateway per AZ, longer
+      backups, and a REQUIRED custom domain with TLS certificates.
+  ImageTag:
+    Type: String
+    Default: bootstrap
+    Description: Tag of the API image in the ECR repository (tags are immutable).
+  DesiredCount:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: >-
+      Number of API tasks. Keep 0 on the very first deploy (the repository is empty
+      until an image is pushed); deploy.sh raises it after pushing the image.
+  MaxCount:
+    Type: Number
+    Default: 4
+    MinValue: 1
+    Description: Upper bound for auto scaling.
+  CpuArchitecture:
+    Type: String
+    Default: ARM64
+    AllowedValues: [ARM64, X86_64]
+    Description: Must match the platform the image was built for (deploy.sh builds ARM64).
+  VpcCidr:
+    Type: String
+    Default: 10.20.0.0/16
+    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/(16|17|18|19|20)$'
+  CloudFrontPrefixListId:
+    Type: String
+    AllowedPattern: '^pl-[0-9a-f]+$'
+    Description: >-
+      Managed prefix list com.amazonaws.global.cloudfront.origin-facing for this region
+      (deploy.sh looks it up). The load balancer only accepts traffic from CloudFront.
+  DomainName:
+    Type: String
+    Default: ''
+    Description: Public host name, e.g. app.example.com. Empty = use the *.cloudfront.net name (dev only).
+  HostedZoneId:
+    Type: String
+    Default: ''
+    Description: Route 53 hosted zone for DomainName. Empty = create the DNS records yourself.
+  AlbCertificateArn:
+    Type: String
+    Default: ''
+    Description: >-
+      ACM certificate in THIS region covering origin.<DomainName>. Enables HTTPS between
+      CloudFront and the load balancer.
+  CloudFrontCertificateArn:
+    Type: String
+    Default: ''
+    Description: ACM certificate in us-east-1 covering DomainName (required by CloudFront).
+  CloudFrontPriceClass:
+    Type: String
+    Default: PriceClass_200
+    AllowedValues: [PriceClass_100, PriceClass_200, PriceClass_All]
+  AlertEmail:
+    Type: String
+    Default: ''
+    Description: Address that receives CloudWatch alarm notifications (confirm the subscription e-mail).
+  SmtpHost:
+    Type: String
+    Default: ''
+    Description: SMTP server for account e-mails (verification, password reset, notifications), e.g. smtp.gmail.com. Empty = e-mails are not delivered.
+  SmtpPort:
+    Type: Number
+    Default: 465
+    AllowedValues: [465, 587]
+    Description: 465 = implicit TLS (Gmail), 587 = STARTTLS. Only this port is opened for outbound traffic.
+  SmtpUsername:
+    Type: String
+    Default: ''
+    Description: SMTP login, e.g. the Gmail address that owns the app password.
+  SmtpFrom:
+    Type: String
+    Default: ''
+    Description: Optional From header, e.g. "WeBond <name@gmail.com>". Defaults to the SMTP username.
+  SmtpPasswordParameter:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^/[A-Za-z0-9_./-]+$'
+    Description: Name of an SSM Parameter Store SecureString (free standard tier) holding the SMTP password, e.g. /webond/prod/smtp-password. Create it yourself; see docs/DEPLOYMENT.md.
+  LogRetentionDays:
+    Type: Number
+    Default: 90
+    AllowedValues: [30, 60, 90, 120, 180, 365, 400, 545, 731]
+  DbInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+  TaskCpu:
+    Type: String
+    Default: '256'
+    AllowedValues: ['256', '512', '1024', '2048']
+  TaskMemory:
+    Type: String
+    Default: '512'
+    AllowedValues: ['512', '1024', '2048', '4096']
+
+Rules:
+  ProductionNeedsDomainAndCertificates:
+    RuleCondition: !Equals [!Ref Environment, prod]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref DomainName, '']]
+        AssertDescription: prod requires DomainName.
+      - Assert: !Not [!Equals [!Ref AlbCertificateArn, '']]
+        AssertDescription: prod requires AlbCertificateArn so CloudFront talks to the load balancer over HTTPS.
+      - Assert: !Not [!Equals [!Ref CloudFrontCertificateArn, '']]
+        AssertDescription: prod requires CloudFrontCertificateArn (ACM certificate in us-east-1).
+      - Assert: !Not [!Equals [!Ref SmtpHost, '']]
+        AssertDescription: prod requires SmtpHost, otherwise new users can never verify their e-mail.
+  SmtpLoginNeedsPassword:
+    RuleCondition: !Not [!Equals [!Ref SmtpUsername, '']]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref SmtpPasswordParameter, '']]
+        AssertDescription: SmtpUsername is set, so SmtpPasswordParameter (SSM SecureString name) is required.
+
+Mappings:
+  # Regional Elastic Load Balancing account that is allowed to write access logs
+  # to S3. Only the regions listed here are supported by this template.
+  ElbLogDeliveryAccount:
+    ap-southeast-1: {AccountId: '114774131450'}
+    ap-southeast-2: {AccountId: '783225319266'}
+    ap-northeast-1: {AccountId: '582318560864'}
+    us-east-1: {AccountId: '127311923021'}
+    us-west-2: {AccountId: '797873946194'}
+    eu-west-1: {AccountId: '156460612806'}
+
+Conditions:
+  IsProd: !Equals [!Ref Environment, prod]
+  HasDomain: !Not [!Equals [!Ref DomainName, '']]
+  HasHostedZone: !Not [!Equals [!Ref HostedZoneId, '']]
+  HasAlbCert: !Not [!Equals [!Ref AlbCertificateArn, '']]
+  HasCfCert: !Not [!Equals [!Ref CloudFrontCertificateArn, '']]
+  HasAlertEmail: !Not [!Equals [!Ref AlertEmail, '']]
+  UseHttpsToAlb: !And [!Condition HasDomain, !Condition HasAlbCert]
+  CreateDnsRecords: !And [!Condition HasDomain, !Condition HasHostedZone]
+  UseCustomCloudFrontDomain: !And [!Condition HasDomain, !Condition HasCfCert]
+  HasSmtp: !Not [!Equals [!Ref SmtpHost, '']]
+  HasSmtpPassword: !Not [!Equals [!Ref SmtpPasswordParameter, '']]
+
+Resources:
+  # ---------------------------------------------------------------- Encryption
+  DataKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'WeBond ${Environment} data key (RDS, Secrets Manager, CloudWatch Logs)'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AccountAdministration
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: CloudWatchLogsUse
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt*'
+              - 'kms:Decrypt*'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:Describe*'
+            Resource: '*'
+            Condition:
+              ArnLike:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
+
+  DataKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/webond-${Environment}-data'
+      TargetKeyId: !Ref DataKey
+
+  # ------------------------------------------------------------------- Network
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - {Key: Name, Value: !Sub 'webond-${Environment}'}
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - {Key: Name, Value: !Sub 'webond-${Environment}'}
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCidr, 6, 8]]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - {Key: Name, Value: !Sub 'webond-${Environment}-public-1'}
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCidr, 6, 8]]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - {Key: Name, Value: !Sub 'webond-${Environment}-public-2'}
+  AppSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [2, !Cidr [!Ref VpcCidr, 6, 8]]
+      Tags:
+        - {Key: Name, Value: !Sub 'webond-${Environment}-app-1'}
+  AppSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [3, !Cidr [!Ref VpcCidr, 6, 8]]
+      Tags:
+        - {Key: Name, Value: !Sub 'webond-${Environment}-app-2'}
+  DataSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [4, !Cidr [!Ref VpcCidr, 6, 8]]
+      Tags:
+        - {Key: Name, Value: !Sub 'webond-${Environment}-data-1'}
+  DataSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [5, !Cidr [!Ref VpcCidr, 6, 8]]
+      Tags:
+        - {Key: Name, Value: !Sub 'webond-${Environment}-data-2'}
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - {Key: Name, Value: !Sub 'webond-${Environment}-public'}
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  Nat1Eip:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+  Nat1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt Nat1Eip.AllocationId
+      SubnetId: !Ref PublicSubnet1
+  Nat2Eip:
+    Type: AWS::EC2::EIP
+    Condition: IsProd
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+  Nat2:
+    Type: AWS::EC2::NatGateway
+    Condition: IsProd
+    Properties:
+      AllocationId: !GetAtt Nat2Eip.AllocationId
+      SubnetId: !Ref PublicSubnet2
+
+  AppRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - {Key: Name, Value: !Sub 'webond-${Environment}-app-1'}
+  AppDefaultRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref AppRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref Nat1
+  AppRouteTable1Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref AppRouteTable1
+      SubnetId: !Ref AppSubnet1
+  AppRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - {Key: Name, Value: !Sub 'webond-${Environment}-app-2'}
+  AppDefaultRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref AppRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !If [IsProd, !Ref Nat2, !Ref Nat1]
+  AppRouteTable2Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref AppRouteTable2
+      SubnetId: !Ref AppSubnet2
+
+  # Data subnets have NO route to the internet.
+  DataRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - {Key: Name, Value: !Sub 'webond-${Environment}-data'}
+  DataSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DataRouteTable
+      SubnetId: !Ref DataSubnet1
+  DataSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DataRouteTable
+      SubnetId: !Ref DataSubnet2
+
+  FlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/webond/${Environment}/vpc-flow'
+      RetentionInDays: !Ref LogRetentionDays
+      KmsKeyId: !GetAtt DataKey.Arn
+  FlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: vpc-flow-logs.amazonaws.com}
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: write-flow-logs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['logs:CreateLogStream', 'logs:PutLogEvents', 'logs:DescribeLogStreams']
+                Resource: !GetAtt FlowLogGroup.Arn
+  VpcFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: VPC
+      ResourceId: !Ref Vpc
+      TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref FlowLogGroup
+      DeliverLogsPermissionArn: !GetAtt FlowLogRole.Arn
+
+  # ----------------------------------------------------------- Security groups
+  # Default "allow all" egress is replaced by explicit rules (the placeholder
+  # below matches nothing); real egress is added as separate resources.
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Load balancer - only CloudFront may connect
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - Description: CloudFront origin-facing addresses only
+          IpProtocol: tcp
+          FromPort: !If [UseHttpsToAlb, 443, 80]
+          ToPort: !If [UseHttpsToAlb, 443, 80]
+          SourcePrefixListId: !Ref CloudFrontPrefixListId
+      SecurityGroupEgress:
+        - Description: placeholder - replaced by the rule to the API below
+          IpProtocol: '-1'
+          CidrIp: 127.0.0.1/32
+  ApiSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: API tasks - only the load balancer may connect
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - Description: from the load balancer
+          IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+      SecurityGroupEgress:
+        - Description: HTTPS to AWS APIs (ECR, Secrets Manager, CloudWatch) through NAT
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+  DbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Database - only the API may connect
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - Description: MySQL from the API tasks
+          IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref ApiSecurityGroup
+      SecurityGroupEgress:
+        - Description: placeholder - the database makes no outbound connections
+          IpProtocol: '-1'
+          CidrIp: 127.0.0.1/32
+  AlbToApiEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref AlbSecurityGroup
+      Description: to the API tasks
+      IpProtocol: tcp
+      FromPort: 8080
+      ToPort: 8080
+      DestinationSecurityGroupId: !Ref ApiSecurityGroup
+  ApiToDbEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref ApiSecurityGroup
+      Description: to the database
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      DestinationSecurityGroupId: !Ref DbSecurityGroup
+  # Outbound SMTP (TLS) through NAT, only when an SMTP server is configured.
+  ApiToSmtpEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Condition: HasSmtp
+    Properties:
+      GroupId: !Ref ApiSecurityGroup
+      Description: SMTP over TLS to the configured mail server
+      IpProtocol: tcp
+      FromPort: !Ref SmtpPort
+      ToPort: !Ref SmtpPort
+      CidrIp: 0.0.0.0/0
+
+  # ------------------------------------------------------------------- Secrets
+  JwtAccessSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: WeBond JWT access-token signing secret (rotate manually, see docs/DEPLOYMENT.md)
+      KmsKeyId: !Ref DataKey
+      GenerateSecretString:
+        PasswordLength: 64
+        ExcludePunctuation: true
+  JwtRefreshSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: WeBond JWT refresh-token signing secret (rotate manually, see docs/DEPLOYMENT.md)
+      KmsKeyId: !Ref DataKey
+      GenerateSecretString:
+        PasswordLength: 64
+        ExcludePunctuation: true
+  # Shared secret that proves a request really came through CloudFront.
+  OriginVerifySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Header value CloudFront adds so the load balancer rejects direct requests
+      KmsKeyId: !Ref DataKey
+      GenerateSecretString:
+        SecretStringTemplate: '{}'
+        GenerateStringKey: token
+        PasswordLength: 40
+        ExcludePunctuation: true
+
+  # ------------------------------------------------------------------ Database
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: WeBond data subnets (no internet route)
+      SubnetIds: [!Ref DataSubnet1, !Ref DataSubnet2]
+  DbParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: WeBond MySQL parameters - TLS required
+      Family: mysql8.4
+      Parameters:
+        require_secure_transport: '1'
+        character_set_server: utf8mb4
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      Engine: mysql
+      # 8.4 is the current LTS line; RDS MySQL 8.0 left standard support in 2026
+      # (extra Extended Support fees). The suite was run against MySQL 8.4.13.
+      EngineVersion: '8.4.8'
+      DBInstanceClass: !Ref DbInstanceClass
+      AllocatedStorage: '20'
+      MaxAllocatedStorage: 100
+      StorageType: gp3
+      StorageEncrypted: true
+      KmsKeyId: !GetAtt DataKey.Arn
+      DBName: webond
+      MasterUsername: webond_admin
+      ManageMasterUserPassword: true
+      MasterUserSecret:
+        KmsKeyId: !Ref DataKey
+      MultiAZ: !If [IsProd, true, false]
+      PubliclyAccessible: false
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VPCSecurityGroups: [!Ref DbSecurityGroup]
+      DBParameterGroupName: !Ref DbParameterGroup
+      BackupRetentionPeriod: !If [IsProd, 35, 7]
+      DeletionProtection: !If [IsProd, true, false]
+      EnableCloudwatchLogsExports: [error, slowquery]
+      AutoMinorVersionUpgrade: true
+      CopyTagsToSnapshot: true
+
+  # -------------------------------------------------------------- Registry/logs
+  ApiRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub 'webond-${Environment}-api'
+      ImageTagMutability: IMMUTABLE
+      EmptyOnDelete: true
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {"rules":[{"rulePriority":1,"description":"keep the last 30 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":30},"action":{"type":"expire"}}]}
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/webond/${Environment}/api'
+      RetentionInDays: !Ref LogRetentionDays
+      KmsKeyId: !GetAtt DataKey.Arn
+
+  # -------------------------------------------------------------- Log bucket
+  LogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-logs
+            Status: Enabled
+            ExpirationInDays: !Ref LogRetentionDays
+      Tags:
+        - {Key: DataClassification, Value: Internal}
+  LogBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LogBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: [!GetAtt LogBucket.Arn, !Sub '${LogBucket.Arn}/*']
+            Condition:
+              Bool: {'aws:SecureTransport': 'false'}
+          - Sid: AlbAccessLogs
+            Effect: Allow
+            Principal:
+              AWS: !Sub
+                - 'arn:${AWS::Partition}:iam::${ElbAccount}:root'
+                - ElbAccount: !FindInMap [ElbLogDeliveryAccount, !Ref 'AWS::Region', AccountId]
+            Action: 's3:PutObject'
+            Resource: !Sub '${LogBucket.Arn}/alb/AWSLogs/${AWS::AccountId}/*'
+
+  # ------------------------------------------------------- Load balancer + WAF
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: LogBucketPolicy
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      Subnets: [!Ref PublicSubnet1, !Ref PublicSubnet2]
+      SecurityGroups: [!Ref AlbSecurityGroup]
+      LoadBalancerAttributes:
+        - {Key: deletion_protection.enabled, Value: !If [IsProd, 'true', 'false']}
+        - {Key: routing.http.drop_invalid_header_fields.enabled, Value: 'true'}
+        - {Key: access_logs.s3.enabled, Value: 'true'}
+        - {Key: access_logs.s3.bucket, Value: !Ref LogBucket}
+        - {Key: access_logs.s3.prefix, Value: alb}
+
+  ApiTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref Vpc
+      TargetType: ip
+      Protocol: HTTP
+      Port: 8080
+      HealthCheckPath: /health/ready
+      HealthCheckIntervalSeconds: 15
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: '200'
+      TargetGroupAttributes:
+        - {Key: deregistration_delay.timeout_seconds, Value: '30'}
+
+  # Anything that is not a verified CloudFront request for /api/* gets a 403.
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: !If [UseHttpsToAlb, 443, 80]
+      Protocol: !If [UseHttpsToAlb, HTTPS, HTTP]
+      SslPolicy: !If [UseHttpsToAlb, ELBSecurityPolicy-TLS13-1-2-2021-06, !Ref 'AWS::NoValue']
+      Certificates: !If
+        - UseHttpsToAlb
+        - [{CertificateArn: !Ref AlbCertificateArn}]
+        - !Ref 'AWS::NoValue'
+      DefaultActions:
+        - Type: fixed-response
+          FixedResponseConfig:
+            StatusCode: '403'
+            ContentType: text/plain
+            MessageBody: Forbidden
+  ApiListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref Listener
+      Priority: 10
+      Conditions:
+        - Field: path-pattern
+          PathPatternConfig:
+            Values: ['/api/*']
+        - Field: http-header
+          HttpHeaderConfig:
+            HttpHeaderName: X-Origin-Verify
+            Values:
+              - !Sub '{{resolve:secretsmanager:${OriginVerifySecret}:SecretString:token}}'
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref ApiTargetGroup
+
+  WebAcl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub 'webond-${Environment}-acl'
+      Rules:
+        - Name: rate-limit-per-ip
+          Priority: 0
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              Limit: 2000
+              AggregateKeyType: IP
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: rate-limit-per-ip
+        - Name: aws-common
+          Priority: 1
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: aws-common
+        - Name: aws-known-bad-inputs
+          Priority: 2
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: aws-known-bad-inputs
+        - Name: aws-sqli
+          Priority: 3
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesSQLiRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: aws-sqli
+  WebAclAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Ref LoadBalancer
+      WebACLArn: !GetAtt WebAcl.Arn
+
+  # ------------------------------------------------------------------- ECS/API
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: ecs-tasks.amazonaws.com}
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+      Policies:
+        - PolicyName: read-own-secrets
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 'secretsmanager:GetSecretValue'
+                Resource:
+                  - !Ref JwtAccessSecret
+                  - !Ref JwtRefreshSecret
+                  - !GetAtt Database.MasterUserSecret.SecretArn
+              - Effect: Allow
+                Action: 'kms:Decrypt'
+                Resource: !GetAtt DataKey.Arn
+              - !If
+                - HasSmtpPassword
+                - Effect: Allow
+                  Action: 'ssm:GetParameters'
+                  Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SmtpPasswordParameter}'
+                - !Ref 'AWS::NoValue'
+  # The application itself needs no AWS permissions.
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: ecs-tasks.amazonaws.com}
+            Action: 'sts:AssumeRole'
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub 'webond-${Environment}'
+      ClusterSettings:
+        - {Name: containerInsights, Value: enabled}
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub 'webond-${Environment}-api'
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      RuntimePlatform:
+        CpuArchitecture: !Ref CpuArchitecture
+        OperatingSystemFamily: LINUX
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: api
+          Image: !Sub '${ApiRepository.RepositoryUri}:${ImageTag}'
+          Essential: true
+          ReadonlyRootFilesystem: true
+          StopTimeout: 35
+          PortMappings:
+            - {ContainerPort: 8080, Protocol: tcp}
+          Environment:
+            - {Name: APP_ENV, Value: production}
+            - {Name: PORT, Value: '8080'}
+            - {Name: LOG_LEVEL, Value: info}
+            - {Name: DB_HOST, Value: !GetAtt Database.Endpoint.Address}
+            - {Name: DB_PORT, Value: !GetAtt Database.Endpoint.Port}
+            - {Name: DB_NAME, Value: webond}
+            - {Name: DB_TLS_CA_FILE, Value: /etc/ssl/rds/global-bundle.pem}
+            - {Name: MIGRATE_ON_BOOT, Value: 'false'}
+            - {Name: SEED_ON_BOOT, Value: 'false'}
+            - {Name: SHUTDOWN_TIMEOUT_MS, Value: '30000'}
+            # E-mail links point at the public site (Task 10.8).
+            - Name: APP_PUBLIC_URL
+              Value: !If [UseCustomCloudFrontDomain, !Sub 'https://${DomainName}', !Sub 'https://${Distribution.DomainName}']
+            - {Name: SMTP_HOST, Value: !Ref SmtpHost}
+            - {Name: SMTP_PORT, Value: !Ref SmtpPort}
+            - {Name: SMTP_USERNAME, Value: !Ref SmtpUsername}
+            - {Name: SMTP_FROM, Value: !Ref SmtpFrom}
+          Secrets:
+            - {Name: DB_USER, ValueFrom: !Sub '${Database.MasterUserSecret.SecretArn}:username::'}
+            - {Name: DB_PASSWORD, ValueFrom: !Sub '${Database.MasterUserSecret.SecretArn}:password::'}
+            - {Name: JWT_ACCESS_SECRET, ValueFrom: !Ref JwtAccessSecret}
+            - {Name: JWT_REFRESH_SECRET, ValueFrom: !Ref JwtRefreshSecret}
+            - !If
+              - HasSmtpPassword
+              - Name: SMTP_PASSWORD
+                ValueFrom: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SmtpPasswordParameter}'
+              - !Ref 'AWS::NoValue'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ApiLogGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: api
+
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn: ApiListenerRule
+    Properties:
+      ServiceName: !Sub 'webond-${Environment}-api'
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      PropagateTags: SERVICE
+      HealthCheckGracePeriodSeconds: 60
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets: [!Ref AppSubnet1, !Ref AppSubnet2]
+          SecurityGroups: [!Ref ApiSecurityGroup]
+      LoadBalancers:
+        - ContainerName: api
+          ContainerPort: 8080
+          TargetGroupArn: !Ref ApiTargetGroup
+
+  ScalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: application-autoscaling.amazonaws.com}
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: scale-this-service
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['ecs:DescribeServices', 'ecs:UpdateService']
+                Resource: !Ref Service
+              - Effect: Allow
+                Action: ['cloudwatch:DescribeAlarms', 'cloudwatch:PutMetricAlarm', 'cloudwatch:DeleteAlarms']
+                Resource: '*'
+  ScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      ServiceNamespace: ecs
+      ScalableDimension: ecs:service:DesiredCount
+      ResourceId: !Sub 'service/${Cluster}/${Service.Name}'
+      MinCapacity: !Ref DesiredCount
+      MaxCapacity: !Ref MaxCount
+      RoleARN: !GetAtt ScalingRole.Arn
+  ScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub 'webond-${Environment}-cpu-target'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 60
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+
+  # ---------------------------------------------------------- Web: S3 + CDN
+  WebBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-old-versions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+      Tags:
+        - {Key: DataClassification, Value: Public}
+  WebBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: [!GetAtt WebBucket.Arn, !Sub '${WebBucket.Arn}/*']
+            Condition:
+              Bool: {'aws:SecureTransport': 'false'}
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal: {Service: cloudfront.amazonaws.com}
+            Action: 's3:GetObject'
+            Resource: !Sub '${WebBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub 'webond-${Environment}-web'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # Client-side routing: any path without a file extension serves the app shell.
+  SpaRewriteFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub 'webond-${Environment}-spa-rewrite'
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Serve index.html for client-side routes
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          if (request.uri.indexOf('.') === -1) {
+            request.uri = '/index.html';
+          }
+          return request;
+        }
+
+  SecurityHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub 'webond-${Environment}-security-headers'
+        SecurityHeadersConfig:
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+            Override: true
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          XSSProtection:
+            ModeBlock: true
+            Protection: true
+            Override: true
+        # Report-only first: switch to an enforced Content-Security-Policy after
+        # checking the browser console on the deployed site.
+        CustomHeadersConfig:
+          Items:
+            - Header: Content-Security-Policy-Report-Only
+              Override: true
+              Value: "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub 'WeBond ${Environment}'
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: !Ref CloudFrontPriceClass
+        DefaultRootObject: index.html
+        Aliases: !If [UseCustomCloudFrontDomain, [!Ref DomainName], !Ref 'AWS::NoValue']
+        ViewerCertificate: !If
+          - UseCustomCloudFrontDomain
+          - AcmCertificateArn: !Ref CloudFrontCertificateArn
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
+        Origins:
+          - Id: web
+            DomainName: !GetAtt WebBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+          - Id: api
+            DomainName: !If [UseHttpsToAlb, !Sub 'origin.${DomainName}', !GetAtt LoadBalancer.DNSName]
+            CustomOriginConfig:
+              OriginProtocolPolicy: !If [UseHttpsToAlb, https-only, http-only]
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginSSLProtocols: [TLSv1.2]
+              OriginReadTimeout: 30
+            OriginCustomHeaders:
+              - HeaderName: X-Origin-Verify
+                HeaderValue: !Sub '{{resolve:secretsmanager:${OriginVerifySecret}:SecretString:token}}'
+        DefaultCacheBehavior:
+          TargetOriginId: web
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
+          ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt SpaRewriteFunction.FunctionMetadata.FunctionARN
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+            CachedMethods: [GET, HEAD]
+            Compress: true
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # Managed-CachingDisabled
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac # Managed-AllViewerExceptHostHeader
+
+  AppDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateDnsRecords
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2 # fixed zone id for all CloudFront distributions
+  OriginDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateDnsRecords
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'origin.${DomainName}'
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt LoadBalancer.DNSName
+        HostedZoneId: !GetAtt LoadBalancer.CanonicalHostedZoneID
+
+  # ---------------------------------------------------------------- Monitoring
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: !Sub 'WeBond ${Environment} alarms'
+  AlarmSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail
+    Properties:
+      TopicArn: !Ref AlarmTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+  AlbTarget5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: The API is returning 5xx errors
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_Target_5XX_Count
+      Dimensions:
+        - {Name: LoadBalancer, Value: !GetAtt LoadBalancer.LoadBalancerFullName}
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+  UnhealthyHostsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: A load balancer target is unhealthy
+      Namespace: AWS/ApplicationELB
+      MetricName: UnHealthyHostCount
+      Dimensions:
+        - {Name: LoadBalancer, Value: !GetAtt LoadBalancer.LoadBalancerFullName}
+        - {Name: TargetGroup, Value: !GetAtt ApiTargetGroup.TargetGroupFullName}
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+  ApiCpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: API CPU is high
+      Namespace: AWS/ECS
+      MetricName: CPUUtilization
+      Dimensions:
+        - {Name: ClusterName, Value: !Ref Cluster}
+        - {Name: ServiceName, Value: !GetAtt Service.Name}
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+  DbCpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Database CPU is high
+      Namespace: AWS/RDS
+      MetricName: CPUUtilization
+      Dimensions:
+        - {Name: DBInstanceIdentifier, Value: !Ref Database}
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+  DbStorageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Database free storage is below 2 GiB
+      Namespace: AWS/RDS
+      MetricName: FreeStorageSpace
+      Dimensions:
+        - {Name: DBInstanceIdentifier, Value: !Ref Database}
+      Statistic: Minimum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 2147483648
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+
+Outputs:
+  SiteUrl:
+    Description: Where the application is served
+    Value: !If [CreateDnsRecords, !Sub 'https://${DomainName}', !Sub 'https://${Distribution.DomainName}']
+  DistributionId:
+    Value: !Ref Distribution
+  DistributionDomainName:
+    Description: Point your DNS (CNAME / alias) at this when you do not use Route 53
+    Value: !GetAtt Distribution.DomainName
+  OriginDnsTarget:
+    Description: Point origin.<DomainName> at this load balancer name when you do not use Route 53
+    Value: !GetAtt LoadBalancer.DNSName
+  WebBucketName:
+    Value: !Ref WebBucket
+  RepositoryName:
+    Value: !Ref ApiRepository
+  RepositoryUri:
+    Value: !GetAtt ApiRepository.RepositoryUri
+  ClusterName:
+    Value: !Ref Cluster
+  ServiceName:
+    Value: !GetAtt Service.Name
+  TaskDefinitionFamily:
+    Value: !Sub 'webond-${Environment}-api'
+  AppSubnetIds:
+    Description: Private subnets for one-off tasks (migrate / seed)
+    Value: !Join [',', [!Ref AppSubnet1, !Ref AppSubnet2]]
+  ApiSecurityGroupId:
+    Value: !Ref ApiSecurityGroup
+  DatabaseEndpoint:
+    Value: !GetAtt Database.Endpoint.Address
+  DatabaseSecretArn:
+    Description: Secrets Manager secret holding the database master credentials (rotated by RDS)
+    Value: !GetAtt Database.MasterUserSecret.SecretArn
+  ApiLogGroupName:
+    Value: !Ref ApiLogGroup
+  LogBucketName:
+    Value: !Ref LogBucket

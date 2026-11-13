@@ -1,0 +1,125 @@
+# Continuous integration: lint, test and build everything on every push / PR.
+# Nothing here deploys or touches AWS.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Web (lint, test, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test
+      # Build exactly like the container / production builds: real API mode.
+      - run: npm run build
+        env:
+          VITE_DATA_SOURCE: api
+          VITE_API_URL: /api
+          VITE_SHOW_DEMO_HINT: 'false'
+
+  api:
+    name: API (format, vet, tests incl. MySQL integration)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: webond-root
+          MYSQL_DATABASE: webond_test # tests refuse the app database name
+          MYSQL_USER: webond
+          MYSQL_PASSWORD: webond
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pwebond-root"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      WEBOND_TEST_DSN: webond:webond@tcp(127.0.0.1:3306)/webond_test?parseTime=true&loc=Asia%2FBangkok
+      WEBOND_TEST_ROOT_DSN: root:webond-root@tcp(127.0.0.1:3306)/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then echo "Run gofmt on:"; echo "$unformatted"; exit 1; fi
+      - run: go vet ./...
+      - name: Create the schema and demo data with the real binary
+        run: |
+          go run ./cmd/webond migrate
+          go run ./cmd/webond seed
+        env:
+          DATABASE_URL: ${{ env.WEBOND_TEST_DSN }}
+      - name: Tests (unit + integration)
+        run: go test -count=1 -tags=integration ./...
+
+  images:
+    name: Docker images build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      # arm64 is what Fargate runs in the deploy template; the Go stage
+      # cross-compiles natively, so no emulation is needed.
+      - name: API image (linux/arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: api
+          platforms: linux/arm64
+          push: false
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+      - name: Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: web
+          push: false
+          build-args: |
+            VITE_DATA_SOURCE=api
+            VITE_API_URL=/api
+            VITE_SHOW_DEMO_HINT=false
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+  infra:
+    name: IaC and scripts (cfn-lint, shellcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install cfn-lint
+      - run: cfn-lint deploy/aws/template.yaml
+      - name: shellcheck
+        run: shellcheck -x deploy/aws/*.sh scripts/gen-env.sh scripts/dev-up.sh
+      - name: deploy.sh dry run changes nothing
+        run: ./deploy/aws/deploy.sh --env dev

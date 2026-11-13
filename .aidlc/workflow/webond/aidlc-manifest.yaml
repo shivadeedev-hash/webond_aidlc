@@ -1,0 +1,99 @@
+version: "1.0.0"
+feature: "webond"
+language: "th"
+platform: "kiro"
+created: "2026-10-28T00:00:00Z"
+updated: "2026-11-12T16:30:00Z"
+state:
+  status: "active"
+  scope: "new"
+  sharedPhases: ["context", "requirements", "design", "tasks"]
+  mode: "comprehensive"
+  foundationSkipped: false
+  implementationMode: "parallel"
+  quickPath: false
+artifacts:
+  context:
+    status: "approved"
+    timestamp: "2026-10-28T00:10:00Z"
+    files: [context.md]
+  requirements:
+    status: "approved"
+    timestamp: "2026-10-28T00:35:00Z"
+    files: [requirements.md, personas.md]
+  design:
+    status: "approved"
+    timestamp: "2026-10-28T00:55:00Z"
+    files: [design.md, design/components.md, design/data-model.md, design/api-spec.md, design/integration.md, design/implementation.md, design/operations.md, design/correctness.md, design/testing-strategy.md]
+  tasks:
+    status: "approved"
+    timestamp: "2026-10-28T01:10:00Z"
+    files: [tasks.md]
+versions:
+  resolved_at: "2026-10-28T00:50:00Z"
+  source: "mixed (web-search + training-knowledge)"
+  map:
+    node: "24.14.1"
+    react: "18.3.x"
+    typescript: "5.6.x"
+    vite: "5.4.x"
+    tailwindcss: "3.4.x"
+    go: "1.23.x"
+    gin: "1.10.x"
+    mysql: "8.0"
+    sqlc: "1.27.x"
+    excelize: "v2"
+implementation:
+  totalTasks: 50
+  completedTasks: 49
+  currentTask: "8.1"
+  currentWave: 5
+context-summary:
+  type: "Greenfield"
+  scope: "new"
+  stack: "React 18 + TypeScript (Vite) + Tailwind frontend; Go (Gin) REST API; MySQL 8.0 real DB (seeded). Frontend-first on mock JSON, then wired to API."
+  architecture: "Layered SPA calling layered Go REST API over MySQL"
+  feature: "WeBond — retail investment platform to buy/sell and manage Bonds, Mutual Funds and Gold with DCA, history and an insight dashboard."
+  impact: "New standalone"
+  complexity: "High"
+  teamSize: "solo"
+  recommendations: { personas: true, units: false, nfr: true }
+decisions:
+  requirements:
+    D1-1-scope: "Investor core journey (9 pages); Admin FR-25 + scheduler FR-15/23 simplified"
+    D1-2-auth: "Full real auth (bcrypt, JWT 15m/7d, lockout, reset; email/OTP via inbox)"
+    D1-3-scheduler: "Manual trigger + seeded history; no always-on cron"
+    D1-4-language: "Thai default + i18n-ready; BR-15 formatting"
+    D1-5-seed: "Rich seed + one pre-verified demo investor; printed credentials"
+    D1-6-personas: "Yes (Investor, Guest, Admin)"
+    D1-7-teamSize: "Solo"
+  design:
+    D3-1-dataAccess: "sqlc"
+    D3-2-decimal: "shopspring/decimal ↔ DECIMAL(18,4)"
+    D3-3-apiFormat: "Envelope {data,error,meta}, typed {code,message} with spec error codes"
+    D3-4-tokenStorage: "Access in memory + refresh in httpOnly secure cookie; silent refresh"
+    D3-5-feState: "TanStack Query + React context"
+    D3-6-dataSwap: "Typed service interface; mock-JSON vs HTTP impl via env flag"
+    D3-7-priceGen: "In-process goroutine ticker → MySQL, persisted toggle + start/stop, FE polls"
+    D3-8-excel: "Backend excelize streaming .xlsx"
+    D3-9-charts: "Recharts"
+    D3-10-orchestration: "Docker Compose (web+api+mysql), seed on startup"
+    D3-11-correctness: "Property/invariant tests on core money math"
+    D3-12-observability: "Minimal (structured logs + health)"
+    D3-13-errorTracking: "Log-based only"
+    D3-14-lifecycle: "Health + readiness + graceful shutdown"
+  tasks:
+    D4-1-breakdown: "By execution wave (W0 Setup → W1 FE+mock → W2 Backend+MySQL+swap → W3 verify → W4 deploy optional)"
+    D4-2-testApproach: "TDD per wave for critical Go logic (money/trading/DCA/wallet); test-after for UI; verify at end of each wave"
+    D4-3-buildPriority: "Layout/tokens + auth shell first, then Market→AssetDetail→Portfolio→Dashboard→DCA→History→Profile"
+    D4-4-integration: "FE on mock-JSON first; add Go API + MySQL; flip VITE_DATA_SOURCE=api; keep mock for tests"
+    D4-5-testScope: "BE unit + property(money) + key integration + FE formatting/component on core flows"
+    D4-6-granularity: "Single-concern ~1–2 days"
+    D4-7-execution: "Sequential by wave, stop-and-verify each wave"
+    D4-8-setupScript: "scripts/setup-env.sh in Wave 0; Docker/MySQL for real build; dev uses npm run dev (mock)"
+steering:
+  updatedBy:
+    product: [context, requirements]
+    tech: [context, design]
+    structure: [context, design]
+units: []

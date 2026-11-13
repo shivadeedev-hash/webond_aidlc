@@ -1,0 +1,86 @@
+# WeBond local full stack: mysql + api + web.
+# One command:  docker compose up -d --build   (or ./scripts/dev-up.sh)
+# Copy .env.example to .env first (./scripts/gen-env.sh does it with random
+# secrets); secrets are read from the environment (12-factor).
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-webond}
+      MYSQL_USER: ${MYSQL_USER:-webond}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-webond}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-webond-root}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-webond-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      PORT: "8080"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DATABASE_URL: ${DATABASE_URL:-webond:webond@tcp(mysql:3306)/webond?parseTime=true&loc=Asia%2FBangkok}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change-me-dev}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-dev}
+      SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:-30000}
+      # Schema migrations and demo data are applied by the API on boot (non-production).
+      MIGRATE_ON_BOOT: ${MIGRATE_ON_BOOT:-true}
+      SEED_ON_BOOT: ${SEED_ON_BOOT:-true}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      # E-mail (Task 10.8). Default: the local Mailpit catcher below, so every
+      # e-mail is visible at http://localhost:8025 and nothing leaves this
+      # machine. For real inboxes set SMTP_* in .env (e.g. Gmail, see
+      # docs/GETTING-STARTED.md); APP_PUBLIC_URL is the address used in links.
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_TLS: ${SMTP_TLS:-}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:5173}
+    ports:
+      - "8080:8080"
+
+  # Local mail catcher (free, MIT licence). Inbox UI: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.33.0
+    restart: unless-stopped
+    environment:
+      MP_MAX_MESSAGES: "500"
+    ports:
+      - "127.0.0.1:8025:8025"   # web inbox (bound to this machine only)
+      - "127.0.0.1:1025:1025"   # SMTP, for tools on the host
+
+  web:
+    # VITE_* values are compile-time, so they are build args (a runtime
+    # `environment:` entry would be ignored). This container is always the
+    # real-API web UI; the root .env VITE_DATA_SOURCE only affects `npm run dev`
+    # on the host.
+    build:
+      context: ./web
+      args:
+        VITE_DATA_SOURCE: api
+        VITE_API_URL: ${PUBLIC_API_URL:-http://localhost:8080/api}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "5173:8080"
+
+volumes:
+  mysql-data:
